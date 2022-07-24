@@ -15,6 +15,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import mean_absolute_error
 
+
+### CHECK FOR INFORMATION LEAK ISSUE - see file INFORMATION LEAK ISSUE.txt ###
+
+
 # Write-Up Notes:
 # Highlight extreme sparsity of dataset, thus not nearest neighbors, but 'latent space neighbors' (also advantage over similar PCA: can be computed directly on dataset)
 # Ggf. hervorheben: sparsity, ressourcenschonend, dense - vollständige operation auf subraum
