@@ -15,65 +15,48 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import mean_absolute_error
 
-
-### CHECK FOR INFORMATION LEAK ISSUE - see file INFORMATION LEAK ISSUE.txt ###
-#X
-
-# Write-Up Notes:
-# Highlight extreme sparsity of dataset, thus not nearest neighbors, but 'latent space neighbors' (also advantage over similar PCA: can be computed directly on dataset)
-# Ggf. hervorheben: sparsity, ressourcenschonend, dense - vollständige operation auf subraum
-# betonen: kNN 'zu Fuß' implementiert, GridSearch zu fuß implementiert
-# make clear that I know that GridSearchCV and pipeline would allow more condensed implementation; but since neighbors searched in latent space, would have to write custom function
-
-# Optimization Potentials:
-# expand dataset from ML100k to ML1M and move to AWS Instance
-# mean imputation: account for users demographic and occupational information in computing means
-# if no rec could be predicted (e.g. no nearest neighbors has rated item), currently overall mean is imputed; change to users biases-adjusted item mean + user bias
-# show increased computational efficiency when operating in latent space (with reasonable reconstruction error)
-
-
 ### ---------------------------------------------- ###
 
 # EXPLORATORY DATA ANALYSIS
 ## Import data
-data_list = pd.read_table('C:\\Users\\marc.feldmann\\Documents\\data_science_local\\MRS\\data\\ml-100k\\u.data', header=0, names=['userId', 'movieId', 'rating', 'timestamp'])
+data_list = pd.read_table('data/ml-100k/u.data', header=0, names=['userId', 'movieId', 'rating', 'timestamp'])
 data_list = data_list.drop('timestamp', axis=1)
-# item_info = pd.read_table('C:\\Users\\marc.feldmann\\Documents\\data_science_local\\MRS\\data\\ml-100k\\u.item', encoding='latin-1', sep='|')
+# item_info = pd.read_table('data/ml-100k/u.item', encoding='latin-1', sep='|')
 data_list.head()
 
-# ## Plot mean ratings per user
-# temp = data_list.groupby('userId').mean()['rating'].sort_values(axis=0)
-# temp = temp.reset_index(level=['userId'])
+## Plot mean ratings per user
+temp = data_list.groupby('userId').mean()['rating'].sort_values(axis=0)
+temp = temp.reset_index(level=['userId'])
 
-# height= temp['rating'].tolist()
-# bars = temp['userId'].astype('str').tolist()
-# y_pos = np.arange(len(bars))
+height= temp['rating'].tolist()
+bars = temp['userId'].astype('str').tolist()
+y_pos = np.arange(len(bars))
 
-# plt.bar(y_pos, height)
-# plt.xlim(0, len(bars))
-# plt.ylim(0, 5)
-# plt.xlabel("User ID")
-# plt.ylabel("Mean Rating")
-# plt.title("Distribution of Mean Ratings per User")
-# plt.show()
+plt.bar(y_pos, height)
+plt.xlim(0, len(bars))
+plt.ylim(0, 5)
+plt.xlabel("User ID")
+plt.ylabel("Mean Rating")
+plt.title("Distribution of Mean Ratings per User")
+plt.show()
 
-# ## Plot rating distribution
-# plt.hist(data_list['rating'], bins=5)
-# plt.xticks([1,2,3,4,5])
-# plt.show()
+## Plot rating distribution
+plt.hist(data_list['rating'], bins=5)
+plt.xticks([1,2,3,4,5])
+plt.show()
 
-# ## Plot count of missing ratings per movie
-# def plot_nas(df: pd.DataFrame):
-#     if df.isnull().sum().sum() != 0:
-#         na_df = (df.isnull().sum() / len(df)) * 100      
-#         na_df = na_df.drop(na_df[na_df == 0].index).sort_values(ascending=False)
-#         missing_data = pd.DataFrame({'Missing Ratio %' :na_df})
-#         missing_data.plot(kind = 'barh')
-#         plt.show()
-#     else:
-#         print('No NAs found')
+## Plot count of missing ratings per movie
+def plot_nas(df: pd.DataFrame):
+    if df.isnull().sum().sum() != 0:
+        na_df = (df.isnull().sum() / len(df)) * 100      
+        na_df = na_df.drop(na_df[na_df == 0].index).sort_values(ascending=False)
+        missing_data = pd.DataFrame({'Missing Ratio %' :na_df})
+        missing_data.plot(kind = 'barh')
+        plt.show()
+    else:
+        print('No NAs found')
 
-# plot_nas(data_list.pivot(index='userId', columns='movieId', values='rating'))
+plot_nas(data_list.pivot(index='userId', columns='movieId', values='rating'))
 
 
 # DATA PREPROCESSING
@@ -88,14 +71,14 @@ data_train_matrix = pd.concat([X_train, y_train], axis=1).pivot(index='userId', 
 data_train_matrix.columns = range(data_train_matrix.columns.size)
 users_rating_bias = data_train_matrix.mean(axis=1)
 
-# mask = np.isnan(data_train_matrix)
-# masked_data_train_matrix = np.ma.masked_array(data_train_matrix, mask)
-# fill_value = pd.DataFrame({row: data_train_matrix.mean(axis=0) for row in data_train_matrix.index}).transpose()
-# data_train_matrix_imp = pd.DataFrame(masked_data_train_matrix.filled(fill_value))
-# data_train_matrix_imp = data_train_matrix_imp.sub(data_train_matrix.mean(axis=1), axis=0)
-# data_train_matrix_imp.to_csv('C:\\Users\\marc.feldmann\\Documents\\data_science_local\\MRS\\data_train_matrix_imp')
+mask = np.isnan(data_train_matrix)
+masked_data_train_matrix = np.ma.masked_array(data_train_matrix, mask)
+fill_value = pd.DataFrame({row: data_train_matrix.mean(axis=0) for row in data_train_matrix.index}).transpose()
+data_train_matrix_imp = pd.DataFrame(masked_data_train_matrix.filled(fill_value))
+data_train_matrix_imp = data_train_matrix_imp.sub(data_train_matrix.mean(axis=1), axis=0)
+data_train_matrix_imp.to_csv('data/data_train_matrix_imp')
 
-data_train_matrix_imp = pd.read_csv('C:\\Users\\marc.feldmann\\Documents\\data_science_local\\MRS\\data_train_matrix_imp')
+# data_train_matrix_imp = pd.read_csv('data/data_train_matrix_imp'')
 data_train_matrix_imp = data_train_matrix_imp.drop('Unnamed: 0', axis=1)
 
 
@@ -156,12 +139,6 @@ def wfunc(i, u_neighbors_distances, wkernel):
 
 
 ## Define functon for generating predictions (all ratings) during optimization
-### FIX THIS:
-## (X) 1) aktuell methodischer Fehler: GridSearch auf Test Daten, nicht auf Validation Daten. Kann zu Overfitting führen. Modellfehler also aktuell zu gut.
-## (X) 2) validation set erzeugung auch aus Optimierung auslagern und schon vorab erzeugen, dann retrieve during optimization. 3 fold validation.
-## (X) 3) Check: Warum habe ich die ratings der nearest neighbors im subraum errechnen lassen? warum nicht einfach aus der imputierten Matrix im manifesten Raum genommen? 
-## ach, könnte sein, weil ich ja den punkt machen wollte, dass man den ausgangsdatensatz löschen kann um ressourcen zu schonen, und trotzdem alle für den Rec nötigen ops durchführen kann
-## vllt für write up lieber in vordergrund stellen: wie durch NN identifikation im latenten raum sparsity im manifesten raum umgangen werden kann
 
 def predict(X, k, neighborhoods, wkernel='unweighted'):
     # X required to be of form: user_id, movie_id
@@ -295,7 +272,7 @@ ax.set_ylim3d([0,max(k_values)])
 ax = ax.plot_trisurf(x, y, z, linewidth=0.5, cmap=cm.coolwarm, antialiased=True)
 
 filename = 'kNN_rec_gridsearch_kd_' + datetime.datetime.now().strftime('%d_%m_%Y__%H_%M_%S')
-plt.savefig('C:\\Users\\marc.feldmann\\Documents\\data_science_local\\MRS\\results\\' + filename + '.png')
+plt.savefig('results/' + filename + '.png')
 plt.close()
 
 print('Gridsearch over k and d done, took %s seconds.' % round((time.time() - t), 2))
@@ -435,8 +412,7 @@ L = pd.DataFrame([ltotdur, lrecerror, lgridname, lmae, lk, lkmax, lkmin, lkstep,
 L = L.T
 L.columns = ['total duration', 'rel_recon_error', 'grid', 'MAE', 'k', 'k_max', 'k_min', 'k_step', 'd', 'd_max', 'd_min', 'd_step', 'metric', 'weighting_scheme']
 filename = 'kNN_rec_optimizationlog_' + datetime.datetime.now().strftime('%d_%m_%Y__%H_%M_%S') + '.csv'
-L.to_csv(path_or_buf=('C:\\Users\\marc.feldmann\\Documents\\data_science_local\\MRS\\results\\' + filename), sep=';', index=False, decimal=',')
+L.to_csv(path_or_buf=('results/' + filename), sep=';', index=False, decimal=',')
 
 print('Optimization of latent space neighbor recommender took %s seconds.' % round((time.time() - start_time), 2))
 
-## auch gg. baseline models: dasselbe nur ohne Dimensionsreduktion; Zufallschätzer 
